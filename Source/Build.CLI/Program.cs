@@ -3,25 +3,24 @@
  *  Licensed under the MIT License. See LICENSE in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 using System;
-using System.Linq;
+using System.Collections.Generic;
+using System.IO;
+using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Runtime.Loader;
 using Dolittle.Assemblies;
 using Dolittle.Booting;
-using Dolittle.Collections;
 using Dolittle.Strings;
-using Dolittle.Types;
-using Microsoft.Extensions.Logging.Abstractions;
-
 namespace Dolittle.Build.CLI
 {
     class Program
     {
         internal static BuildTarget BuildTarget;
-
         static int Main(string[] args)
         {
             try
-            {
+            {  
+                while (!System.Diagnostics.Debugger.IsAttached) System.Threading.Thread.Sleep(100);
                 var startTime = DateTime.UtcNow;
 
                 var assemblyFile = args[0];
@@ -33,9 +32,10 @@ namespace Dolittle.Build.CLI
                     pluginAssemblies.Length == 0 ||
                     string.IsNullOrEmpty(configurationFile)) return 0;
 
-                var assembly = AssemblyLoadContext.Default.LoadFromAssemblyPath(assemblyFile);
-                var assemblyContext = AssemblyContext.From(assemblyFile);
-                BuildTarget = new BuildTarget(assemblyFile, outputAssemblyFile, assembly, assemblyContext);
+                var assemblyLoadContext = AssemblyLoadContext.Default;
+                var assembly = assemblyLoadContext.LoadFromAssemblyPath(assemblyFile);
+                var assemblyContext = AssemblyContext.From(assembly);
+                BuildTarget = new BuildTarget(assemblyFile, outputAssemblyFile, assemblyContext.Assembly, assemblyContext);
 
                 Console.WriteLine("Performing Dolittle post-build steps");
 
@@ -78,6 +78,31 @@ namespace Dolittle.Build.CLI
             }
 
             return 0;
+        }
+        
+        static Assembly OnResolving(AssemblyLoadContext context, AssemblyName name)
+        {
+            var basePath = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)?
+                            @"c:\Program Files\dotnet\shared":
+                            "/usr/local/share/dotnet/shared";
+
+            foreach (var path in Directory.GetDirectories(basePath)) 
+            {
+                var versionDir = Path.Combine(path, $"{name.Version.Major}.{name.Version.Minor}.{name.Version.Build}");
+                if (Directory.Exists(versionDir)) 
+                {
+                    foreach (var file in Directory.GetFiles(versionDir))
+                    {
+                        if (Path.GetFileNameWithoutExtension(file).ToLower().Equals(name.Name.ToLower()))
+                        {
+                            var assembly = Assembly.LoadFrom(file);
+                            return assembly;
+
+                        }   
+                    }
+                }
+            }
+            return null;
         }
     }
 }

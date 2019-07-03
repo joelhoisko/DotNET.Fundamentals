@@ -7,7 +7,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Runtime.InteropServices;
 using System.Runtime.Loader;
 using Microsoft.Extensions.DependencyModel;
 using Microsoft.Extensions.DependencyModel.Resolution;
@@ -28,9 +27,8 @@ namespace Dolittle.Assemblies
         public AssemblyContext(Assembly assembly)
         {
             Assembly = assembly;
-
             DependencyContext = DependencyContext.Load(assembly);
-
+            AssemblyLoadContext.Default.Resolving += OnResolving;
             var codeBaseUri = new Uri(assembly.CodeBase);
             var basePath = Path.GetDirectoryName(codeBaseUri.LocalPath);
 
@@ -40,6 +38,7 @@ namespace Dolittle.Assemblies
                     new ReferenceAssemblyPathResolver(),
                     new PackageCompilationAssemblyResolver(),
                     new NuGetFallbackFolderAssemblyResolver(),
+                    new PackageRuntimeShareAssemblyResolver(),
                     new PackageRuntimeStoreAssemblyResolver()
             });
             AssemblyLoadContext = AssemblyLoadContext.GetLoadContext(assembly);
